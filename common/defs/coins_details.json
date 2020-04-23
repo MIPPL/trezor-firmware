@@ -743,6 +743,24 @@
                 }
             ]
         },
+        "bitcoin:SIN": {
+            "links": {
+                "Github": "https://github.com/SINOVATEblockchain/SIN-core",
+                "Homepage": "https://sinovate.io"
+            },
+            "marketcap_usd": 1035735,
+            "name": "Sinovate",
+            "shortcut": "SIN",
+            "t1_enabled": "yes",
+            "t2_enabled": "yes",
+            "type": "coin",
+            "wallet": [
+                {
+                    "name": "Sinovate Core",
+                    "url": "https://https://sinovate.io/sinovate-wallets/"
+                }
+            ]
+        },
         "bitcoin:SMART": {
             "links": {
                 "Github": "https://github.com/SmartCash/Core-Smart",
