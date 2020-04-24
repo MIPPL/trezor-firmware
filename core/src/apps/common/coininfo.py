@@ -1495,6 +1495,7 @@ def by_name(name: str) -> CoinInfo:
             return CoinInfo(
                 coin_name=name,
                 coin_shortcut="SIN",
+                decimals=8,                
                 address_type=63,
                 address_type_p2sh=5,
                 maxfee_kb=1000000,
@@ -1508,10 +1509,12 @@ def by_name(name: str) -> CoinInfo:
                 segwit=False,
                 fork_id=None,
                 force_bip143=False,
-                bip115=False,
                 decred=False,
                 negative_fee=False,
                 curve_name='secp256k1',
+                extra_data=False,
+                timestamp=False,
+                overwintered=False,                
                 confidential_assets=None,
             ) 
         elif name == "SmartCash":
