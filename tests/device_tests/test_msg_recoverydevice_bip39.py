@@ -35,7 +35,7 @@ class TestMsgRecoverydevice:
                 passphrase_protection=True,
                 pin_protection=True,
                 label="label",
-                language="english",
+                language="en-US",
                 enforce_wordlist=True,
             )
         )
@@ -79,13 +79,13 @@ class TestMsgRecoverydevice:
 
         # Mnemonic is the same
         client.init_device()
-        assert client.debug.read_mnemonic_secret() == MNEMONIC12.encode()
+        assert client.debug.state().mnemonic_secret == MNEMONIC12.encode()
 
         assert client.features.pin_protection is True
         assert client.features.passphrase_protection is True
 
         # Do passphrase-protected action, PassphraseRequest should be raised
-        resp = client.call_raw(proto.Ping(passphrase_protection=True))
+        resp = client.call_raw(proto.GetAddress())
         assert isinstance(resp, proto.PassphraseRequest)
         client.call_raw(proto.Cancel())
 
@@ -98,7 +98,7 @@ class TestMsgRecoverydevice:
                 passphrase_protection=False,
                 pin_protection=False,
                 label="label",
-                language="english",
+                language="en-US",
                 enforce_wordlist=True,
             )
         )
@@ -131,18 +131,14 @@ class TestMsgRecoverydevice:
 
         # Mnemonic is the same
         client.init_device()
-        assert client.debug.read_mnemonic_secret() == MNEMONIC12.encode()
+        assert client.debug.state().mnemonic_secret == MNEMONIC12.encode()
 
         assert client.features.pin_protection is False
         assert client.features.passphrase_protection is False
 
-        # Do passphrase-protected action, PassphraseRequest should NOT be raised
-        resp = client.call_raw(proto.Ping(passphrase_protection=True))
-        assert isinstance(resp, proto.Success)
-
-        # Do PIN-protected action, PinRequest should NOT be raised
-        resp = client.call_raw(proto.Ping(pin_protection=True))
-        assert isinstance(resp, proto.Success)
+        # Do pin & passphrase-protected action, PassphraseRequest should NOT be raised
+        resp = client.call_raw(proto.GetAddress())
+        assert isinstance(resp, proto.Address)
 
     @pytest.mark.setup_client(uninitialized=True)
     def test_word_fail(self, client):
@@ -152,7 +148,7 @@ class TestMsgRecoverydevice:
                 passphrase_protection=False,
                 pin_protection=False,
                 label="label",
-                language="english",
+                language="en-US",
                 enforce_wordlist=True,
             )
         )
@@ -180,7 +176,7 @@ class TestMsgRecoverydevice:
                 passphrase_protection=True,
                 pin_protection=True,
                 label="label",
-                language="english",
+                language="en-US",
                 enforce_wordlist=True,
             )
         )
@@ -207,5 +203,13 @@ class TestMsgRecoverydevice:
     def test_already_initialized(self, client):
         with pytest.raises(RuntimeError):
             device.recover(
-                client, 12, False, False, "label", "english", client.mnemonic_callback
+                client, 12, False, False, "label", "en-US", client.mnemonic_callback
             )
+
+        ret = client.call_raw(
+            proto.RecoveryDevice(
+                word_count=12, type=proto.RecoveryDeviceType.ScrambledWords
+            )
+        )
+        assert isinstance(ret, proto.Failure)
+        assert "Device is already initialized" in ret.message

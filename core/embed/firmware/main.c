@@ -17,6 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include STM32_HAL_H
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,13 +40,20 @@
 #include "display.h"
 #include "flash.h"
 #include "mpu.h"
+#ifdef RDI
+#include "rdi.h"
+#endif
 #include "rng.h"
 #include "sdcard.h"
+#include "supervise.h"
 #include "touch.h"
 
 int main(void) {
   // initialize pseudo-random number generator
   drbg_init();
+#ifdef RDI
+  rdi_start();
+#endif
 
   // reinitialize HAL for Trezor One
 #if TREZOR_MODEL == 1
@@ -54,7 +63,9 @@ int main(void) {
   collect_hw_entropy();
 
 #if TREZOR_MODEL == T
+#if PRODUCTION
   check_and_replace_bootloader();
+#endif
   // Enable MPU
   mpu_config_firmware();
 #endif
@@ -72,6 +83,11 @@ int main(void) {
   touch_init();
   touch_power_on();
 
+  // jump to unprivileged mode
+  // http://infocenter.arm.com/help/topic/com.arm.doc.dui0552a/CHDBIBGJ.html
+  __asm__ volatile("msr control, %0" ::"r"(0x1));
+  __asm__ volatile("isb");
+
   display_clear();
 #endif
 
@@ -80,6 +96,11 @@ int main(void) {
   // to recover from limit hit.
   mp_stack_set_top(&_estack);
   mp_stack_set_limit((char *)&_estack - (char *)&_heap_end - 1024);
+
+#if MICROPY_ENABLE_PYSTACK
+  static mp_obj_t pystack[1024];
+  mp_pystack_init(pystack, &pystack[MP_ARRAY_SIZE(pystack)]);
+#endif
 
   // GC init
   printf("CORE: Starting GC\n");
@@ -108,10 +129,63 @@ int main(void) {
 // MicroPython default exception handler
 
 void __attribute__((noreturn)) nlr_jump_fail(void *val) {
-  ensure(secfalse, "uncaught exception");
+  error_shutdown("Internal error", "(UE)", NULL, NULL);
 }
 
-void PendSV_Handler(void) { pendsv_isr_handler(); }
+// interrupt handlers
+
+void NMI_Handler(void) {
+  // Clock Security System triggered NMI
+  if ((RCC->CIR & RCC_CIR_CSSF) != 0) {
+    error_shutdown("Internal error", "(CS)", NULL, NULL);
+  }
+}
+
+void HardFault_Handler(void) {
+  error_shutdown("Internal error", "(HF)", NULL, NULL);
+}
+
+void MemManage_Handler(void) {
+  error_shutdown("Internal error", "(MM)", NULL, NULL);
+}
+
+void BusFault_Handler(void) {
+  error_shutdown("Internal error", "(BF)", NULL, NULL);
+}
+
+void UsageFault_Handler(void) {
+  error_shutdown("Internal error", "(UF)", NULL, NULL);
+}
+
+void SVC_C_Handler(uint32_t *stack) {
+  uint8_t svc_number = ((uint8_t *)stack[6])[-2];
+  switch (svc_number) {
+    case SVC_ENABLE_IRQ:
+      HAL_NVIC_EnableIRQ(stack[0]);
+      break;
+    case SVC_DISABLE_IRQ:
+      HAL_NVIC_DisableIRQ(stack[0]);
+      break;
+    case SVC_SET_PRIORITY:
+      NVIC_SetPriority(stack[0], stack[1]);
+      break;
+    default:
+      stack[0] = 0xffffffff;
+      break;
+  }
+}
+
+__attribute__((naked)) void SVC_Handler(void) {
+  __asm volatile(
+      " tst lr, #4    \n"    // Test Bit 3 to see which stack pointer we should
+                             // use.
+      " ite eq        \n"    // Tell the assembler that the nest 2 instructions
+                             // are if-then-else
+      " mrseq r0, msp \n"    // Make R0 point to main stack pointer
+      " mrsne r0, psp \n"    // Make R0 point to process stack pointer
+      " b SVC_C_Handler \n"  // Off to C land
+  );
+}
 
 // MicroPython builtin stubs
 

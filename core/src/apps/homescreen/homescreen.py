@@ -1,42 +1,35 @@
-from trezor import config, res, ui
+import storage
+import storage.device
+from trezor import config, ui
 
-from apps.common import storage
-from apps.common.storage import device as storage_device
+from . import HomescreenBase
 
 
 async def homescreen() -> None:
     await Homescreen()
 
 
-class Homescreen(ui.Layout):
+class Homescreen(HomescreenBase):
     def __init__(self) -> None:
-        self.repaint = True
+        super().__init__()
+        if not storage.device.is_initialized():
+            self.label = "Go to trezor.io/start"
 
     def on_render(self) -> None:
-        if not self.repaint:
-            return
-
-        image = None
-        if not storage.is_initialized():
-            label = "Go to trezor.io/start"
-        else:
-            label = storage_device.get_label() or "My Trezor"
-            image = storage_device.get_homescreen()
-
-        if not image:
-            image = res.load("apps/homescreen/res/bg.toif")
-
-        if storage.is_initialized() and storage_device.no_backup():
+        # warning bar on top
+        if storage.device.is_initialized() and storage.device.no_backup():
             ui.header_error("SEEDLESS")
-        elif storage.is_initialized() and storage_device.unfinished_backup():
+        elif storage.device.is_initialized() and storage.device.unfinished_backup():
             ui.header_error("BACKUP FAILED!")
-        elif storage.is_initialized() and storage_device.needs_backup():
+        elif storage.device.is_initialized() and storage.device.needs_backup():
             ui.header_warning("NEEDS BACKUP!")
-        elif storage.is_initialized() and not config.has_pin():
+        elif storage.device.is_initialized() and not config.has_pin():
             ui.header_warning("PIN NOT SET!")
+        elif storage.device.get_experimental_features():
+            ui.header_warning("EXPERIMENTAL MODE!")
         else:
             ui.display.bar(0, 0, ui.WIDTH, ui.HEIGHT, ui.BG)
-        ui.display.avatar(48, 48 - 10, image, ui.WHITE, ui.BLACK)
-        ui.display.text_center(ui.WIDTH // 2, 220, label, ui.BOLD, ui.FG, ui.BG)
 
-        self.repaint = False
+        # homescreen with shifted avatar and text on bottom
+        ui.display.avatar(48, 48 - 10, self.image, ui.WHITE, ui.BLACK)
+        ui.display.text_center(ui.WIDTH // 2, 220, self.label, ui.BOLD, ui.FG, ui.BG)

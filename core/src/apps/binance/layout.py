@@ -7,14 +7,14 @@ from trezor.messages import (
     BinanceTransferMsg,
     ButtonRequestType,
 )
+from trezor.strings import format_amount
 from trezor.ui.scroll import Paginated
 from trezor.ui.text import Text
-from trezor.utils import format_amount
+
+from apps.common.confirm import require_hold_to_confirm
+from apps.common.layout import split_address
 
 from . import helpers
-
-from apps.common.confirm import hold_to_confirm
-from apps.common.layout import split_address
 
 
 async def require_confirm_transfer(ctx, msg: BinanceTransferMsg):
@@ -23,7 +23,7 @@ async def require_confirm_transfer(ctx, msg: BinanceTransferMsg):
         for coin in msg.coins:
             coin_page = Text("Confirm " + direction, ui.ICON_SEND, icon_color=ui.GREEN)
             coin_page.bold(
-                format_amount(coin.amount, helpers.DIVISIBILITY) + " " + coin.denom
+                format_amount(coin.amount, helpers.DECIMALS) + " " + coin.denom
             )
             coin_page.normal("to")
             coin_page.mono(*split_address(msg.address))
@@ -38,7 +38,9 @@ async def require_confirm_transfer(ctx, msg: BinanceTransferMsg):
     for txoutput in msg.outputs:
         pages.extend(make_input_output_pages(txoutput, "output"))
 
-    return await hold_to_confirm(ctx, Paginated(pages), ButtonRequestType.ConfirmOutput)
+    return await require_hold_to_confirm(
+        ctx, Paginated(pages), ButtonRequestType.ConfirmOutput
+    )
 
 
 async def require_confirm_cancel(ctx, msg: BinanceCancelMsg):
@@ -52,7 +54,7 @@ async def require_confirm_cancel(ctx, msg: BinanceCancelMsg):
     page2.normal("Order ID:")
     page2.bold(msg.refid)
 
-    return await hold_to_confirm(
+    return await require_hold_to_confirm(
         ctx, Paginated([page1, page2]), ButtonRequestType.SignTx
     )
 
@@ -73,10 +75,10 @@ async def require_confirm_order(ctx, msg: BinanceOrderMsg):
 
     page3 = Text("Confirm order 3/3", ui.ICON_SEND, icon_color=ui.GREEN)
     page3.normal("Quantity:")
-    page3.bold(format_amount(msg.quantity, helpers.DIVISIBILITY))
+    page3.bold(format_amount(msg.quantity, helpers.DECIMALS))
     page3.normal("Price:")
-    page3.bold(format_amount(msg.price, helpers.DIVISIBILITY))
+    page3.bold(format_amount(msg.price, helpers.DECIMALS))
 
-    return await hold_to_confirm(
+    return await require_hold_to_confirm(
         ctx, Paginated([page1, page2, page3]), ButtonRequestType.SignTx
     )

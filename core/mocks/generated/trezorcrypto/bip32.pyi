@@ -30,7 +30,7 @@ class HDNode:
         Derive a BIP0032 child node in place using Cardano algorithm.
         """
 
-    def derive_path(self, path: List[int]) -> None:
+    def derive_path(self, path: Sequence[int]) -> None:
         """
         Go through a list of indexes and iteratively derive a child node in
         place.
@@ -39,11 +39,6 @@ class HDNode:
     def serialize_public(self, version: int) -> str:
         """
         Serialize the public info from HD node to base58 string.
-        """
-
-    def serialize_private(self, version: int) -> str:
-        """
-        Serialize the private info HD node to base58 string.
         """
 
     def clone(self) -> HDNode:
@@ -112,15 +107,6 @@ class HDNode:
         """
         Cleans up sensitive memory.
         """
-
-
-# extmod/modtrezorcrypto/modtrezorcrypto-bip32.h
-def deserialize(
-    value: str, version_public: int, version_private: int
-) -> HDNode:
-    """
-    Construct a BIP0032 HD node from a base58-serialized value.
-    """
 
 
 # extmod/modtrezorcrypto/modtrezorcrypto-bip32.h

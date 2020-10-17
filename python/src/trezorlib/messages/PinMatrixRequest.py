@@ -6,7 +6,7 @@ if __debug__:
     try:
         from typing import Dict, List  # noqa: F401
         from typing_extensions import Literal  # noqa: F401
-        EnumTypePinMatrixRequestType = Literal[1, 2, 3]
+        EnumTypePinMatrixRequestType = Literal[1, 2, 3, 4, 5]
     except ImportError:
         pass
 
@@ -16,6 +16,7 @@ class PinMatrixRequest(p.MessageType):
 
     def __init__(
         self,
+        *,
         type: EnumTypePinMatrixRequestType = None,
     ) -> None:
         self.type = type
@@ -23,5 +24,5 @@ class PinMatrixRequest(p.MessageType):
     @classmethod
     def get_fields(cls) -> Dict:
         return {
-            1: ('type', p.EnumType("PinMatrixRequestType", (1, 2, 3)), 0),
+            1: ('type', p.EnumType("PinMatrixRequestType", (1, 2, 3, 4, 5)), None),
         }

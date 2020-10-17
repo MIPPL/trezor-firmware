@@ -17,6 +17,7 @@ class MoneroTransactionSignInputRequest(p.MessageType):
 
     def __init__(
         self,
+        *,
         src_entr: MoneroTransactionSourceEntry = None,
         vini: bytes = None,
         vini_hmac: bytes = None,
@@ -24,6 +25,7 @@ class MoneroTransactionSignInputRequest(p.MessageType):
         pseudo_out_hmac: bytes = None,
         pseudo_out_alpha: bytes = None,
         spend_key: bytes = None,
+        orig_idx: int = None,
     ) -> None:
         self.src_entr = src_entr
         self.vini = vini
@@ -32,15 +34,17 @@ class MoneroTransactionSignInputRequest(p.MessageType):
         self.pseudo_out_hmac = pseudo_out_hmac
         self.pseudo_out_alpha = pseudo_out_alpha
         self.spend_key = spend_key
+        self.orig_idx = orig_idx
 
     @classmethod
     def get_fields(cls) -> Dict:
         return {
-            1: ('src_entr', MoneroTransactionSourceEntry, 0),
-            2: ('vini', p.BytesType, 0),
-            3: ('vini_hmac', p.BytesType, 0),
-            4: ('pseudo_out', p.BytesType, 0),
-            5: ('pseudo_out_hmac', p.BytesType, 0),
-            6: ('pseudo_out_alpha', p.BytesType, 0),
-            7: ('spend_key', p.BytesType, 0),
+            1: ('src_entr', MoneroTransactionSourceEntry, None),
+            2: ('vini', p.BytesType, None),
+            3: ('vini_hmac', p.BytesType, None),
+            4: ('pseudo_out', p.BytesType, None),
+            5: ('pseudo_out_hmac', p.BytesType, None),
+            6: ('pseudo_out_alpha', p.BytesType, None),
+            7: ('spend_key', p.BytesType, None),
+            8: ('orig_idx', p.UVarintType, None),
         }

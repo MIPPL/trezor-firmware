@@ -64,6 +64,7 @@ class blake2b:
         self,
         data: bytes = None,
         outlen: int = blake2b.digest_size,
+        key: bytes = None,
         personal: bytes = None,
     ) -> None:
         """
@@ -172,6 +173,35 @@ class groestl512:
         """
 
 
+# extmod/modtrezorcrypto/modtrezorcrypto-hmac.h
+class hmac:
+    """
+    HMAC context.
+    """
+    SHA256: int
+    SHA512: int
+
+    def __init__(
+        self,
+        hashtype: int,
+        key: bytes,
+        message: bytes = None
+    ) -> None:
+        """
+        Create a HMAC context.
+        """
+
+    def update(self, message: bytes) -> None:
+        """
+        Update a HMAC context.
+        """
+
+    def digest(self) -> bytes:
+        """
+        Return the digest of processed data so far.
+        """
+
+
 # extmod/modtrezorcrypto/modtrezorcrypto-pbkdf2.h
 class pbkdf2:
     """
@@ -200,23 +230,6 @@ class pbkdf2:
     def key(self) -> bytes:
         """
         Retrieve derived key.
-        """
-
-
-# extmod/modtrezorcrypto/modtrezorcrypto-rfc6979.h
-class rfc6979:
-    """
-    RFC6979 context.
-    """
-
-    def __init__(self, secret_key: bytes, hash: bytes) -> None:
-        """
-        Initialize RFC6979 context from secret key and a hash.
-        """
-
-    def next(self) -> bytes:
-        """
-        Compute next 32-bytes of pseudorandom data.
         """
 
 

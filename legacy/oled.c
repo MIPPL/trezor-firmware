@@ -241,7 +241,7 @@ void oledSetBuffer(uint8_t *buf) {
   memcpy(_oledbuffer, buf, sizeof(_oledbuffer));
 }
 
-void oledDrawChar(int x, int y, char c, int font) {
+void oledDrawChar(int x, int y, char c, uint8_t font) {
   if (x >= OLED_WIDTH || y >= OLED_HEIGHT || y <= -FONT_HEIGHT) {
     return;
   }
@@ -276,7 +276,7 @@ static uint8_t convert_char(const char a) {
   // non-printable ASCII character
   if (c < ' ') {
     last_was_utf8 = 0;
-    return '_';
+    return 0x7f;
   }
 
   // regular ASCII character
@@ -290,7 +290,7 @@ static uint8_t convert_char(const char a) {
   // bytes 11xxxxxx are first bytes of UTF-8 characters
   if (c >= 0xC0) {
     last_was_utf8 = 1;
-    return '_';
+    return 0x7f;
   }
 
   if (last_was_utf8) {
@@ -298,13 +298,13 @@ static uint8_t convert_char(const char a) {
     return 0;  // skip glyph
   } else {
     // ... or they are just non-printable ASCII characters
-    return '_';
+    return 0x7f;
   }
 
   return 0;
 }
 
-int oledStringWidth(const char *text, int font) {
+int oledStringWidth(const char *text, uint8_t font) {
   if (!text) return 0;
   int space = (font & FONT_DOUBLE) ? 2 : 1;
   int l = 0;
@@ -317,7 +317,7 @@ int oledStringWidth(const char *text, int font) {
   return l;
 }
 
-void oledDrawString(int x, int y, const char *text, int font) {
+void oledDrawString(int x, int y, const char *text, uint8_t font) {
   if (!text) return;
   int l = 0;
   int space = (font & FONT_DOUBLE) ? 2 : 1;
@@ -330,12 +330,12 @@ void oledDrawString(int x, int y, const char *text, int font) {
   }
 }
 
-void oledDrawStringCenter(int x, int y, const char *text, int font) {
+void oledDrawStringCenter(int x, int y, const char *text, uint8_t font) {
   x = x - oledStringWidth(text, font) / 2;
   oledDrawString(x, y, text, font);
 }
 
-void oledDrawStringRight(int x, int y, const char *text, int font) {
+void oledDrawStringRight(int x, int y, const char *text, uint8_t font) {
   x -= oledStringWidth(text, font);
   oledDrawString(x, y, text, font);
 }

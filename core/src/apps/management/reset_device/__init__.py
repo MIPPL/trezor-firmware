@@ -1,3 +1,5 @@
+import storage
+import storage.device
 from trezor import config, wire
 from trezor.crypto import bip39, hashlib, random, slip39
 from trezor.messages import BackupType
@@ -6,8 +8,6 @@ from trezor.messages.EntropyRequest import EntropyRequest
 from trezor.messages.Success import Success
 from trezor.pin import pin_to_int
 
-from apps.common import storage
-from apps.common.storage import device as storage_device
 from apps.management import backup_types
 from apps.management.change_pin import request_pin_confirm
 from apps.management.reset_device import layout
@@ -27,6 +27,9 @@ async def reset_device(ctx: wire.Context, msg: ResetDevice) -> Success:
 
     # make sure user knows they're setting up a new wallet
     await layout.show_reset_device_warning(ctx, msg.backup_type)
+
+    # wipe storage to make sure the device is in a clear state
+    storage.reset()
 
     # request and set new PIN
     if msg.pin_protection:
@@ -53,8 +56,8 @@ async def reset_device(ctx: wire.Context, msg: ResetDevice) -> Success:
         secret = bip39.from_data(secret).encode()
     elif msg.backup_type in (BackupType.Slip39_Basic, BackupType.Slip39_Advanced):
         # generate and set SLIP39 parameters
-        storage_device.set_slip39_identifier(slip39.generate_random_identifier())
-        storage_device.set_slip39_iteration_exponent(slip39.DEFAULT_ITERATION_EXPONENT)
+        storage.device.set_slip39_identifier(slip39.generate_random_identifier())
+        storage.device.set_slip39_iteration_exponent(slip39.DEFAULT_ITERATION_EXPONENT)
     else:
         # Unknown backup type.
         raise RuntimeError
@@ -72,10 +75,10 @@ async def reset_device(ctx: wire.Context, msg: ResetDevice) -> Success:
         await backup_seed(ctx, msg.backup_type, secret)
 
     # write settings and master secret into storage
-    storage_device.load_settings(
-        label=msg.label, use_passphrase=msg.passphrase_protection
-    )
-    storage_device.store_mnemonic_secret(
+    if msg.label is not None:
+        storage.device.set_label(msg.label)
+    storage.device.set_passphrase_enabled(bool(msg.passphrase_protection))
+    storage.device.store_mnemonic_secret(
         secret,  # for SLIP-39, this is the EMS
         msg.backup_type,
         needs_backup=not perform_backup,
@@ -101,12 +104,12 @@ async def backup_slip39_basic(
     threshold = await layout.slip39_prompt_threshold(ctx, shares_count)
 
     # generate the mnemonics
-    mnemonics = slip39.generate_mnemonics_from_data(
-        encrypted_master_secret,
-        storage_device.get_slip39_identifier(),
+    mnemonics = slip39.split_ems(
         1,  # Single Group threshold
         [(threshold, shares_count)],  # Single Group threshold/count
-        storage_device.get_slip39_iteration_exponent(),
+        storage.device.get_slip39_identifier(),
+        storage.device.get_slip39_iteration_exponent(),
+        encrypted_master_secret,
     )[0]
 
     # show and confirm individual shares
@@ -136,12 +139,12 @@ async def backup_slip39_advanced(
         groups.append((share_threshold, share_count))
 
     # generate the mnemonics
-    mnemonics = slip39.generate_mnemonics_from_data(
-        encrypted_master_secret=encrypted_master_secret,
-        identifier=storage_device.get_slip39_identifier(),
+    mnemonics = slip39.split_ems(
         group_threshold=group_threshold,
         groups=groups,
-        iteration_exponent=storage_device.get_slip39_iteration_exponent(),
+        identifier=storage.device.get_slip39_identifier(),
+        iteration_exponent=storage.device.get_slip39_iteration_exponent(),
+        encrypted_master_secret=encrypted_master_secret,
     )
 
     # show and confirm individual shares
@@ -164,7 +167,7 @@ def _validate_reset_device(msg: ResetDevice) -> None:
             raise wire.ProcessError("Invalid strength (has to be 128, 192 or 256 bits)")
     if msg.display_random and (msg.skip_backup or msg.no_backup):
         raise wire.ProcessError("Can't show internal entropy when backup is skipped")
-    if storage.is_initialized():
+    if storage.device.is_initialized():
         raise wire.UnexpectedMessage("Already initialized")
 
 

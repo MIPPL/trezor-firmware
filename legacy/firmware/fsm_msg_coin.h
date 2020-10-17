@@ -56,7 +56,6 @@ void fsm_msgGetPublicKey(const GetPublicKey *msg) {
   resp->node.chain_code.size = 32;
   memcpy(resp->node.chain_code.bytes, node->chain_code, 32);
   resp->node.has_private_key = false;
-  resp->node.has_public_key = true;
   resp->node.public_key.size = 33;
   memcpy(resp->node.public_key.bytes, node->public_key, 33);
   if (node->public_key[0] == 1) {
@@ -102,6 +101,13 @@ void fsm_msgSignTx(const SignTx *msg) {
 
   const CoinInfo *coin = fsm_getCoin(msg->has_coin_name, msg->coin_name);
   if (!coin) return;
+
+  CHECK_PARAM((coin->decred || coin->overwintered) || !msg->has_expiry,
+              _("Expiry not enabled on this coin."))
+  CHECK_PARAM(coin->timestamp || !msg->has_timestamp,
+              _("Timestamp not enabled on this coin."))
+  CHECK_PARAM(!coin->timestamp || msg->timestamp, _("Timestamp must be set."))
+
   const HDNode *node = fsm_getDerivedNode(coin->curve_name, NULL, 0, NULL);
   if (!node) return;
 
@@ -112,83 +118,6 @@ void fsm_msgTxAck(TxAck *msg) {
   CHECK_PARAM(msg->has_tx, _("No transaction provided"));
 
   signing_txack(&(msg->tx));
-}
-
-static bool path_mismatched(const CoinInfo *coin, const GetAddress *msg) {
-  bool mismatch = false;
-
-  // m : no path
-  if (msg->address_n_count == 0) {
-    return false;
-  }
-
-  // m/44' : BIP44 Legacy
-  // m / purpose' / coin_type' / account' / change / address_index
-  if (msg->address_n[0] == (0x80000000 + 44)) {
-    mismatch |= (msg->script_type != InputScriptType_SPENDADDRESS);
-    mismatch |= (msg->address_n_count != 5);
-    mismatch |= (msg->address_n[1] != coin->coin_type);
-    mismatch |= (msg->address_n[2] & 0x80000000) == 0;
-    mismatch |= (msg->address_n[3] & 0x80000000) == 0x80000000;
-    mismatch |= (msg->address_n[4] & 0x80000000) == 0x80000000;
-    return mismatch;
-  }
-
-  // m/45' - BIP45 Copay Abandoned Multisig P2SH
-  // m / purpose' / cosigner_index / change / address_index
-  if (msg->address_n[0] == (0x80000000 + 45)) {
-    mismatch |= (msg->script_type != InputScriptType_SPENDMULTISIG);
-    mismatch |= (msg->address_n_count != 4);
-    mismatch |= (msg->address_n[1] & 0x80000000) == 0x80000000;
-    mismatch |= (msg->address_n[2] & 0x80000000) == 0x80000000;
-    mismatch |= (msg->address_n[3] & 0x80000000) == 0x80000000;
-    return mismatch;
-  }
-
-  // m/48' - BIP48 Copay Multisig P2SH
-  // m / purpose' / coin_type' / account' / change / address_index
-  // Electrum:
-  // m / purpose' / coin_type' / account' / type' / change / address_index
-  if (msg->address_n[0] == (0x80000000 + 48)) {
-    mismatch |= (msg->script_type != InputScriptType_SPENDMULTISIG) &&
-                (msg->script_type != InputScriptType_SPENDP2SHWITNESS) &&
-                (msg->script_type != InputScriptType_SPENDWITNESS);
-    mismatch |= (msg->address_n_count != 5) && (msg->address_n_count != 6);
-    mismatch |= (msg->address_n[1] != coin->coin_type);
-    mismatch |= (msg->address_n[2] & 0x80000000) == 0;
-    mismatch |= (msg->address_n[4] & 0x80000000) == 0x80000000;
-    return mismatch;
-  }
-
-  // m/49' : BIP49 SegWit
-  // m / purpose' / coin_type' / account' / change / address_index
-  if (msg->address_n[0] == (0x80000000 + 49)) {
-    mismatch |= (msg->script_type != InputScriptType_SPENDP2SHWITNESS);
-    mismatch |= !coin->has_segwit;
-    mismatch |= !coin->has_address_type_p2sh;
-    mismatch |= (msg->address_n_count != 5);
-    mismatch |= (msg->address_n[1] != coin->coin_type);
-    mismatch |= (msg->address_n[2] & 0x80000000) == 0;
-    mismatch |= (msg->address_n[3] & 0x80000000) == 0x80000000;
-    mismatch |= (msg->address_n[4] & 0x80000000) == 0x80000000;
-    return mismatch;
-  }
-
-  // m/84' : BIP84 Native SegWit
-  // m / purpose' / coin_type' / account' / change / address_index
-  if (msg->address_n[0] == (0x80000000 + 84)) {
-    mismatch |= (msg->script_type != InputScriptType_SPENDWITNESS);
-    mismatch |= !coin->has_segwit;
-    mismatch |= !coin->bech32_prefix;
-    mismatch |= (msg->address_n_count != 5);
-    mismatch |= (msg->address_n[1] != coin->coin_type);
-    mismatch |= (msg->address_n[2] & 0x80000000) == 0;
-    mismatch |= (msg->address_n[3] & 0x80000000) == 0x80000000;
-    mismatch |= (msg->address_n[4] & 0x80000000) == 0x80000000;
-    return mismatch;
-  }
-
-  return false;
 }
 
 void fsm_msgGetAddress(const GetAddress *msg) {
@@ -217,7 +146,8 @@ void fsm_msgGetAddress(const GetAddress *msg) {
   }
 
   if (msg->has_show_display && msg->show_display) {
-    char desc[20];
+    char desc[20] = {0};
+    int multisig_index = 0;
     if (msg->has_multisig) {
       strlcpy(desc, "Multisig __ of __:", sizeof(desc));
       const uint32_t m = msg->multisig.m;
@@ -226,13 +156,14 @@ void fsm_msgGetAddress(const GetAddress *msg) {
       desc[10] = '0' + (m % 10);
       desc[15] = (n < 10) ? ' ' : ('0' + (n / 10));
       desc[16] = '0' + (n % 10);
+      multisig_index =
+          cryptoMultisigPubkeyIndex(coin, &(msg->multisig), node->public_key);
     } else {
       strlcpy(desc, _("Address:"), sizeof(desc));
     }
 
-    bool mismatch = path_mismatched(coin, msg);
-
-    if (mismatch) {
+    if (!coin_known_path_check(coin, msg->script_type, msg->address_n_count,
+                               msg->address_n, true)) {
       layoutDialogSwipe(&bmp_icon_warning, _("Abort"), _("Continue"), NULL,
                         _("Wrong address path"), _("for selected coin."), NULL,
                         _("Continue at your"), _("own risk!"), NULL);
@@ -247,7 +178,9 @@ void fsm_msgGetAddress(const GetAddress *msg) {
     bool is_bech32 = msg->script_type == InputScriptType_SPENDWITNESS;
     if (!fsm_layoutAddress(address, desc, is_cashaddr || is_bech32,
                            is_cashaddr ? strlen(coin->cashaddr_prefix) + 1 : 0,
-                           msg->address_n, msg->address_n_count, false)) {
+                           msg->address_n, msg->address_n_count, false,
+                           msg->has_multisig ? &(msg->multisig) : NULL,
+                           multisig_index, coin)) {
       return;
     }
   }
@@ -303,9 +236,6 @@ void fsm_msgSignMessage(const SignMessage *msg) {
 }
 
 void fsm_msgVerifyMessage(const VerifyMessage *msg) {
-  CHECK_PARAM(msg->has_address, _("No address provided"));
-  CHECK_PARAM(msg->has_message, _("No message provided"));
-
   const CoinInfo *coin = fsm_getCoin(msg->has_coin_name, msg->coin_name);
   if (!coin) return;
   layoutProgressSwipe(_("Verifying"), 0);

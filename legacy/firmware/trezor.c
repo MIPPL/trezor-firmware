@@ -72,7 +72,7 @@ void check_lock_screen(void) {
 
     if (button.YesUp) {
       // lock the screen
-      session_clear(true);
+      config_lockDevice();
       layoutScreensaver();
     } else {
       // resume homescreen
@@ -85,7 +85,7 @@ void check_lock_screen(void) {
     if ((timer_ms() - system_millis_lock_start) >=
         config_getAutoLockDelayMs()) {
       // lock the screen
-      session_clear(true);
+      config_lockDevice();
       layoutScreensaver();
     }
   }
@@ -123,7 +123,7 @@ int main(void) {
                                    // unpredictable stack protection checks
   oledInit();
 #else
-  check_bootloader();
+  check_bootloader(true);
   setupApp();
   __stack_chk_guard = random32();  // this supports compiler provided
                                    // unpredictable stack protection checks

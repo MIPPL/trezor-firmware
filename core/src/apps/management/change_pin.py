@@ -1,3 +1,4 @@
+from storage.device import is_initialized
 from trezor import config, ui, wire
 from trezor.messages.Success import Success
 from trezor.pin import pin_to_int
@@ -6,11 +7,11 @@ from trezor.ui.text import Text
 from apps.common.confirm import require_confirm
 from apps.common.layout import show_success
 from apps.common.request_pin import (
+    error_pin_invalid,
+    error_pin_matches_wipe_code,
     request_pin_and_sd_salt,
     request_pin_confirm,
-    show_pin_invalid,
 )
-from apps.common.storage import is_initialized
 
 if False:
     from trezor.messages.ChangePin import ChangePin
@@ -29,8 +30,7 @@ async def change_pin(ctx: wire.Context, msg: ChangePin) -> Success:
     # if changing pin, pre-check the entered pin before getting new pin
     if curpin and not msg.remove:
         if not config.check_pin(pin_to_int(curpin), salt):
-            await show_pin_invalid(ctx)
-            raise wire.PinInvalid("PIN invalid")
+            await error_pin_invalid(ctx)
 
     # get new pin
     if not msg.remove:
@@ -40,8 +40,10 @@ async def change_pin(ctx: wire.Context, msg: ChangePin) -> Success:
 
     # write into storage
     if not config.change_pin(pin_to_int(curpin), pin_to_int(newpin), salt, salt):
-        await show_pin_invalid(ctx)
-        raise wire.PinInvalid("PIN invalid")
+        if newpin:
+            await error_pin_matches_wipe_code(ctx)
+        else:
+            await error_pin_invalid(ctx)
 
     if newpin:
         if curpin:

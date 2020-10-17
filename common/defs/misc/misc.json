@@ -25,7 +25,6 @@
             "Github": "https://github.com/stellar/stellar-core"
         },
         "wallet": {
-            "Account Viewer": "https://trezor.io/stellar/",
             "Exodus": "https://www.exodus.io"
         },
         "blockchain_link": null
@@ -84,9 +83,7 @@
         },
         "blockchain_link": {
             "type": "ripple",
-            "url": [
-                "wss://s.altnet.rippletest.net"
-            ]
+            "url": ["wss://s.altnet.rippletest.net"]
         }
     },
     {
@@ -145,7 +142,7 @@
             "Github": "https://github.com/wanchain/go-wanchain"
         },
         "wallet": {
-            "Wanchain Wallet": "https://www.wanchain.org/products"
+            "Wanchain Wallet": "https://www.wanchain.org/getstarted/"
         },
         "blockchain_link": null
     },
@@ -174,9 +171,7 @@
             "Homepage": "https://www.omnilayer.org",
             "Github": "https://github.com/OmniLayer"
         },
-        "wallet": {
-            "OMNI Trezor": "https://omnitrezor.com/"
-        },
+        "wallet": {},
         "blockchain_link": null
     },
     {
@@ -189,9 +184,7 @@
             "Homepage": "https://maidsafe.net",
             "Github": "https://github.com/maidsafe"
         },
-        "wallet": {
-            "OMNI Trezor": "https://omnitrezor.com/"
-        },
+        "wallet": {},
         "blockchain_link": null
     },
     {
@@ -204,7 +197,7 @@
             "Homepage": "https://binance.org"
         },
         "wallet": {
-            "Trust Wallet": "https://trustwallet.com"
+            "Binance Wallet": "https://binance.org/unlock"
         },
         "blockchain_link": null
     },
@@ -217,9 +210,7 @@
         "links": {
             "Homepage": "https://tether.to"
         },
-        "wallet": {
-            "OMNI Trezor": "https://omnitrezor.com/"
-        },
+        "wallet": {},
         "blockchain_link": null
     }
 ]

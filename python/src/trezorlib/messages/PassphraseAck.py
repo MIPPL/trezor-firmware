@@ -15,15 +15,19 @@ class PassphraseAck(p.MessageType):
 
     def __init__(
         self,
+        *,
         passphrase: str = None,
-        state: bytes = None,
+        _state: bytes = None,
+        on_device: bool = None,
     ) -> None:
         self.passphrase = passphrase
-        self.state = state
+        self._state = _state
+        self.on_device = on_device
 
     @classmethod
     def get_fields(cls) -> Dict:
         return {
-            1: ('passphrase', p.UnicodeType, 0),
-            2: ('state', p.BytesType, 0),
+            1: ('passphrase', p.UnicodeType, None),
+            2: ('_state', p.BytesType, None),
+            3: ('on_device', p.BoolType, None),
         }

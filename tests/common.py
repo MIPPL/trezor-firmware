@@ -14,6 +14,12 @@
 # You should have received a copy of the License along with this library.
 # If not, see <https://www.gnu.org/licenses/lgpl-3.0.html>.
 
+import json
+from pathlib import Path
+
+import pytest
+
+from trezorlib import btc, tools
 from trezorlib.messages import ButtonRequestType as B
 
 # fmt: off
@@ -37,7 +43,36 @@ MNEMONIC_SLIP39_ADVANCED_33 = [
     "wildlife deal beard romp alcohol space mild usual clothes union nuclear testify course research heat listen task location thank hospital slice smell failure fawn helpful priest ambition average recover lecture process dough stadium",
     "wildlife deal acrobat romp anxiety axis starting require metric flexible geology game drove editor edge screw helpful have huge holy making pitch unknown carve holiday numb glasses survive already tenant adapt goat fangs",
 ]
+# External entropy mocked as received from trezorlib.
+EXTERNAL_ENTROPY = b"zlutoucky kun upel divoke ody" * 2
 # fmt: on
+
+TEST_ADDRESS_N = tools.parse_path("m/44h/1h/0h/0/0")
+COMMON_FIXTURES_DIR = (
+    Path(__file__).parent.resolve().parent / "common" / "tests" / "fixtures"
+)
+
+
+def parametrize_using_common_fixtures(*paths):
+    fixtures = []
+    for path in paths:
+        fixtures.append(json.loads((COMMON_FIXTURES_DIR / path).read_text()))
+
+    tests = []
+    for fixture in fixtures:
+        for test in fixture["tests"]:
+            tests.append(
+                pytest.param(
+                    test["parameters"],
+                    test["result"],
+                    marks=pytest.mark.setup_client(
+                        passphrase=fixture["setup"]["passphrase"],
+                        mnemonic=fixture["setup"]["mnemonic"],
+                    ),
+                )
+            )
+
+    return pytest.mark.parametrize("parameters, result", tests)
 
 
 def generate_entropy(strength, internal_entropy, external_entropy):
@@ -162,3 +197,9 @@ def read_and_confirm_mnemonic(debug, words):
         debug.input(mnemonic[index])
 
     return " ".join(mnemonic)
+
+
+def get_test_address(client):
+    """Fetch a testnet address on a fixed path. Useful to make a pin/passphrase
+    protected call, or to identify the root secret (seed+passphrase)"""
+    return btc.get_address(client, "Testnet", TEST_ADDRESS_N)

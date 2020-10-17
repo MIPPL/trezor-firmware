@@ -1,24 +1,20 @@
-from trezor import ui, wire
+import storage.recovery
+from trezor import strings, ui, wire
 from trezor.crypto.slip39 import MAX_SHARE_COUNT
-from trezor.messages import BackupType, ButtonRequestType
-from trezor.messages.ButtonAck import ButtonAck
-from trezor.messages.ButtonRequest import ButtonRequest
+from trezor.messages import ButtonRequestType
 from trezor.ui.scroll import Paginated
 from trezor.ui.text import Text
 from trezor.ui.word_select import WordSelector
 
+from apps.common import button_request
+from apps.common.confirm import confirm, info_confirm, require_confirm
+from apps.common.layout import show_success, show_warning
+from apps.management import backup_types
+
+from . import word_validity
 from .keyboard_bip39 import Bip39Keyboard
 from .keyboard_slip39 import Slip39Keyboard
 from .recover import RecoveryAborted
-
-from apps.common.confirm import confirm, info_confirm, require_confirm
-from apps.common.layout import show_success, show_warning
-from apps.common.storage import recovery as storage_recovery
-from apps.management import backup_types
-from apps.management.recovery_device import recover
-
-if __debug__:
-    from apps.debug import input_signal
 
 if False:
     from typing import List, Optional, Callable, Iterable, Tuple, Union
@@ -37,7 +33,7 @@ async def confirm_abort(ctx: wire.GenericContext, dry_run: bool = False) -> bool
 
 
 async def request_word_count(ctx: wire.GenericContext, dry_run: bool) -> int:
-    await ctx.call(ButtonRequest(code=ButtonRequestType.MnemonicWordCount), ButtonAck)
+    await button_request(ctx, code=ButtonRequestType.MnemonicWordCount)
 
     if dry_run:
         text = Text("Seed check", ui.ICON_RECOVERY)
@@ -45,19 +41,17 @@ async def request_word_count(ctx: wire.GenericContext, dry_run: bool) -> int:
         text = Text("Recovery mode", ui.ICON_RECOVERY)
     text.normal("Number of words?")
 
-    if __debug__:
-        count = await ctx.wait(WordSelector(text), input_signal())
-        count = int(count)  # if input_signal was triggered, count is a string
-    else:
-        count = await ctx.wait(WordSelector(text))
-
-    return count  # type: ignore
+    count = await ctx.wait(WordSelector(text))
+    # WordSelector can return int, or string if the value came from debuglink
+    # ctx.wait has a return type Any
+    # Hence, it is easier to convert the returned value to int explicitly
+    return int(count)
 
 
 async def request_mnemonic(
     ctx: wire.GenericContext, word_count: int, backup_type: Optional[EnumTypeBackupType]
 ) -> Optional[str]:
-    await ctx.call(ButtonRequest(code=ButtonRequestType.MnemonicInput), ButtonAck)
+    await button_request(ctx, code=ButtonRequestType.MnemonicInput)
 
     words = []  # type: List[str]
     for i in range(word_count):
@@ -67,91 +61,23 @@ async def request_mnemonic(
             )  # type: Union[Slip39Keyboard, Bip39Keyboard]
         else:
             keyboard = Bip39Keyboard("Type word %s of %s:" % (i + 1, word_count))
-        if __debug__:
-            word = await ctx.wait(keyboard, input_signal())
-        else:
-            word = await ctx.wait(keyboard)
 
-        if not await check_word_validity(ctx, i, word, backup_type, words):
-            return None
-
+        word = await ctx.wait(keyboard)
         words.append(word)
 
+        try:
+            word_validity.check(backup_type, words)
+        except word_validity.AlreadyAdded:
+            await show_share_already_added(ctx)
+            return None
+        except word_validity.IdentifierMismatch:
+            await show_identifier_mismatch(ctx)
+            return None
+        except word_validity.ThresholdReached:
+            await show_group_threshold_reached(ctx)
+            return None
+
     return " ".join(words)
-
-
-async def check_word_validity(
-    ctx: wire.GenericContext,
-    current_index: int,
-    current_word: str,
-    backup_type: Optional[EnumTypeBackupType],
-    previous_words: List[str],
-) -> bool:
-    # we can't perform any checks if the backup type was not yet decided
-    if backup_type is None:
-        return True
-    # there are no "on-the-fly" checks for BIP-39
-    if backup_type is BackupType.Bip39:
-        return True
-
-    previous_mnemonics = recover.fetch_previous_mnemonics()
-    if previous_mnemonics is None:
-        # this should not happen if backup_type is set
-        raise RuntimeError
-
-    if backup_type == BackupType.Slip39_Basic:
-        # check if first 3 words of mnemonic match
-        # we can check against the first one, others were checked already
-        if current_index < 3:
-            share_list = previous_mnemonics[0][0].split(" ")
-            if share_list[current_index] != current_word:
-                await show_identifier_mismatch(ctx)
-                return False
-        elif current_index == 3:
-            for share in previous_mnemonics[0]:
-                share_list = share.split(" ")
-                # check if the fourth word is different from previous shares
-                if share_list[current_index] == current_word:
-                    await show_share_already_added(ctx)
-                    return False
-    elif backup_type == BackupType.Slip39_Advanced:
-        # in case of advanced slip39 recovery we only check 2 words
-        if current_index < 2:
-            share_list = next(s for s in previous_mnemonics if s)[0].split(" ")
-            if share_list[current_index] != current_word:
-                await show_identifier_mismatch(ctx)
-                return False
-        # check if we reached threshold in group
-        elif current_index == 2:
-            for i, group in enumerate(previous_mnemonics):
-                if len(group) > 0:
-                    if current_word == group[0].split(" ")[current_index]:
-                        remaining_shares = (
-                            storage_recovery.fetch_slip39_remaining_shares()
-                        )
-                        # if backup_type is not None, some share was already entered -> remaining needs to be set
-                        assert remaining_shares is not None
-                        if remaining_shares[i] == 0:
-                            await show_group_threshold_reached(ctx)
-                            return False
-        # check if share was already added for group
-        elif current_index == 3:
-            # we use the 3rd word from previously entered shares to find the group id
-            group_identifier_word = previous_words[2]
-            group_index = None
-            for i, group in enumerate(previous_mnemonics):
-                if len(group) > 0:
-                    if group_identifier_word == group[0].split(" ")[2]:
-                        group_index = i
-
-            if group_index:
-                group = previous_mnemonics[group_index]
-                for share in group:
-                    if current_word == share.split(" ")[current_index]:
-                        await show_share_already_added(ctx)
-                        return False
-
-    return True
 
 
 async def show_remaining_shares(
@@ -164,10 +90,11 @@ async def show_remaining_shares(
     for remaining, group in groups:
         if 0 < remaining < MAX_SHARE_COUNT:
             text = Text("Remaining Shares")
-            if remaining > 1:
-                text.bold("%s more shares starting" % remaining)
-            else:
-                text.bold("%s more share starting" % remaining)
+            text.bold(
+                strings.format_plural(
+                    "{count} more {plural} starting", remaining, "share"
+                )
+            )
             for word in group:
                 text.normal(word)
             pages.append(text)
@@ -176,10 +103,11 @@ async def show_remaining_shares(
         ):
             text = Text("Remaining Shares")
             groups_remaining = group_threshold - shares_remaining.count(0)
-            if groups_remaining > 1:
-                text.bold("%s more groups starting" % groups_remaining)
-            elif groups_remaining > 0:
-                text.bold("%s more group starting" % groups_remaining)
+            text.bold(
+                strings.format_plural(
+                    "{count} more {plural} starting", groups_remaining, "group"
+                )
+            )
             for word in group:
                 text.normal(word)
             pages.append(text)
@@ -280,7 +208,7 @@ class RecoveryHomescreen(ui.Component):
     def __init__(self, text: str, subtext: str = None):
         self.text = text
         self.subtext = subtext
-        self.dry_run = storage_recovery.is_dry_run()
+        self.dry_run = storage.recovery.is_dry_run()
         self.repaint = True
 
     def on_render(self) -> None:
@@ -345,6 +273,6 @@ async def homescreen_dialog(
             # go forward in the recovery process
             break
         # user has chosen to abort, confirm the choice
-        dry_run = storage_recovery.is_dry_run()
+        dry_run = storage.recovery.is_dry_run()
         if await confirm_abort(ctx, dry_run):
             raise RecoveryAborted

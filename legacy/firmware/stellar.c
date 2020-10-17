@@ -1241,7 +1241,7 @@ void stellar_format_price(uint32_t numerator, uint32_t denominator, char *out,
   }
 
   // Format with bn_format_uint64
-  bn_format_uint64(value, NULL, NULL, scale, 0, false, out, outlen);
+  bn_format_uint64(value, NULL, NULL, 6, 6 - scale, true, out, outlen);
 }
 
 /*
@@ -1460,7 +1460,7 @@ const HDNode *stellar_deriveNode(const uint32_t *address_n,
   const char *curve = "ed25519";
 
   // Device not initialized, passphrase request cancelled, or unsupported curve
-  if (!config_getRootNode(&node, curve, true)) {
+  if (!config_getRootNode(&node, curve)) {
     return 0;
   }
   // Failed to derive private key
@@ -1792,13 +1792,7 @@ void stellar_layoutSigningDialog(const char *line1, const char *line2,
   offset_y += line_height;
 
   // Cancel button
-  oledDrawString(1, OLED_HEIGHT - 8, "\x15", FONT_STANDARD);
-  oledDrawString(fontCharWidth(FONT_STANDARD, '\x15') + 3, OLED_HEIGHT - 8,
-                 "Cancel", FONT_STANDARD);
-  oledInvert(0, OLED_HEIGHT - 9,
-             fontCharWidth(FONT_STANDARD, '\x15') +
-                 oledStringWidth("Cancel", FONT_STANDARD) + 2,
-             OLED_HEIGHT - 1);
+  layoutButtonNo(_("Cancel"), &bmp_btn_cancel);
 
   // Warnings (drawn centered between the buttons
   if (warning) {
@@ -1814,14 +1808,7 @@ void stellar_layoutSigningDialog(const char *line1, const char *line2,
     strlcpy(str_next_label, _("Next"), sizeof(str_next_label));
   }
 
-  oledDrawString(OLED_WIDTH - fontCharWidth(FONT_STANDARD, '\x06') - 1,
-                 OLED_HEIGHT - 8, "\x06", FONT_STANDARD);
-  oledDrawString(OLED_WIDTH - oledStringWidth(str_next_label, FONT_STANDARD) -
-                     fontCharWidth(FONT_STANDARD, '\x06') - 3,
-                 OLED_HEIGHT - 8, str_next_label, FONT_STANDARD);
-  oledInvert(OLED_WIDTH - oledStringWidth(str_next_label, FONT_STANDARD) -
-                 fontCharWidth(FONT_STANDARD, '\x06') - 4,
-             OLED_HEIGHT - 9, OLED_WIDTH - 1, OLED_HEIGHT - 1);
+  layoutButtonYes(str_next_label, &bmp_btn_confirm);
 
   oledRefresh();
 }

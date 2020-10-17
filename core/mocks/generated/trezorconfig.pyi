@@ -35,6 +35,13 @@ def lock() -> None:
 
 
 # extmod/modtrezorconfig/modtrezorconfig.c
+def is_unlocked() -> bool:
+    """
+    Returns True if storage is unlocked, False otherwise.
+    """
+
+
+# extmod/modtrezorconfig/modtrezorconfig.c
 def has_pin() -> bool:
     """
     Returns True if storage has a configured PIN, False otherwise.
@@ -57,6 +64,31 @@ def change_pin(
 ) -> bool:
     """
     Change PIN and external salt. Returns True on success, False on failure.
+    """
+
+
+# extmod/modtrezorconfig/modtrezorconfig.c
+def ensure_not_wipe_code(pin: int) -> None:
+    """
+    Wipes the device if the entered PIN is the wipe code.
+    """
+
+
+# extmod/modtrezorconfig/modtrezorconfig.c
+def has_wipe_code() -> bool:
+    """
+    Returns True if storage has a configured wipe code, False otherwise.
+    """
+
+
+# extmod/modtrezorconfig/modtrezorconfig.c
+def change_wipe_code(
+    pin: int,
+    ext_salt: Optional[bytes],
+    wipe_code: int,
+) -> bool:
+    """
+    Change wipe code. Returns True on success, False on failure.
     """
 
 

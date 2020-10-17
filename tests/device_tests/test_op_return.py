@@ -17,11 +17,14 @@
 import pytest
 
 from trezorlib import btc, messages as proto
-from trezorlib.tools import CallException, parse_path
+from trezorlib.exceptions import TrezorFailure
+from trezorlib.tools import parse_path
 
-from ..tx_cache import tx_cache
+from ..tx_cache import TxCache
+from .signtx import request_finished, request_input, request_meta, request_output
 
-TX_API = tx_cache("Bitcoin")
+B = proto.ButtonRequestType
+TX_API = TxCache("Bitcoin")
 
 TXHASH_d5f65e = bytes.fromhex(
     "d5f65ee80147b4bcc70b75e4bbf2d7382021b871bd8867ef8fa525ef50864882"
@@ -31,7 +34,10 @@ TXHASH_d5f65e = bytes.fromhex(
 class TestOpReturn:
     def test_opreturn(self, client):
         inp1 = proto.TxInputType(
-            address_n=parse_path("44'/0'/0'/0/2"), prev_hash=TXHASH_d5f65e, prev_index=0
+            address_n=parse_path("44'/0'/0'/0/2"),
+            amount=390000,
+            prev_hash=TXHASH_d5f65e,
+            prev_index=0,
         )
 
         out1 = proto.TxOutputType(
@@ -49,64 +55,23 @@ class TestOpReturn:
         with client:
             client.set_expected_responses(
                 [
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXMETA,
-                        details=proto.TxRequestDetailsType(tx_hash=TXHASH_d5f65e),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(
-                            request_index=0, tx_hash=TXHASH_d5f65e
-                        ),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(
-                            request_index=1, tx_hash=TXHASH_d5f65e
-                        ),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(
-                            request_index=0, tx_hash=TXHASH_d5f65e
-                        ),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.ButtonRequest(code=proto.ButtonRequestType.ConfirmOutput),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=1),
-                    ),
-                    proto.ButtonRequest(code=proto.ButtonRequestType.ConfirmOutput),
-                    proto.ButtonRequest(code=proto.ButtonRequestType.SignTx),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=1),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=1),
-                    ),
-                    proto.TxRequest(request_type=proto.RequestType.TXFINISHED),
+                    request_input(0),
+                    request_output(0),
+                    proto.ButtonRequest(code=B.ConfirmOutput),
+                    request_output(1),
+                    proto.ButtonRequest(code=B.ConfirmOutput),
+                    proto.ButtonRequest(code=B.SignTx),
+                    request_input(0),
+                    request_meta(TXHASH_d5f65e),
+                    request_input(0, TXHASH_d5f65e),
+                    request_input(1, TXHASH_d5f65e),
+                    request_output(0, TXHASH_d5f65e),
+                    request_input(0),
+                    request_output(0),
+                    request_output(1),
+                    request_output(0),
+                    request_output(1),
+                    request_finished(),
                 ]
             )
             _, serialized_tx = btc.sign_tx(
@@ -118,9 +83,11 @@ class TestOpReturn:
             == "010000000182488650ef25a58fef6788bd71b8212038d7f2bbe4750bc7bcb44701e85ef6d5000000006b483045022100bc36e1227b334e856c532bbef86d30a96823a5f2461738f4dbf969dfbcf1b40b022078c5353ec9a4bce2bb05bd1ec466f2ab379c1aad926e208738407bba4e09784b012103330236b68aa6fdcaca0ea72e11b360c84ed19a338509aa527b678a7ec9076882ffffffff0260cc0500000000001976a914de9b2a8da088824e8fe51debea566617d851537888ac00000000000000001c6a1a74657374206f6620746865206f705f72657475726e206461746100000000"
         )
 
+    @pytest.mark.skip_ui
     def test_nonzero_opreturn(self, client):
         inp1 = proto.TxInputType(
             address_n=parse_path("44'/0'/10'/0/5"),
+            amount=390000,
             prev_hash=TXHASH_d5f65e,
             prev_index=0,
         )
@@ -133,49 +100,37 @@ class TestOpReturn:
 
         with client:
             client.set_expected_responses(
-                [
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXMETA,
-                        details=proto.TxRequestDetailsType(tx_hash=TXHASH_d5f65e),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(
-                            request_index=0, tx_hash=TXHASH_d5f65e
-                        ),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXINPUT,
-                        details=proto.TxRequestDetailsType(
-                            request_index=1, tx_hash=TXHASH_d5f65e
-                        ),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(
-                            request_index=0, tx_hash=TXHASH_d5f65e
-                        ),
-                    ),
-                    proto.TxRequest(
-                        request_type=proto.RequestType.TXOUTPUT,
-                        details=proto.TxRequestDetailsType(request_index=0),
-                    ),
-                    proto.Failure(),
-                ]
+                [request_input(0), request_output(0), proto.Failure()]
             )
 
-            with pytest.raises(CallException) as exc:
+            with pytest.raises(
+                TrezorFailure, match="OP_RETURN output with non-zero amount"
+            ):
                 btc.sign_tx(client, "Bitcoin", [inp1], [out1], prev_txes=TX_API)
 
-            if client.features.model == "1":
-                assert exc.value.args[0] == proto.FailureType.ProcessError
-                assert exc.value.args[1].endswith("Failed to compile output")
-            else:
-                assert exc.value.args[0] == proto.FailureType.DataError
-                assert exc.value.args[1].endswith(
-                    "OP_RETURN output with non-zero amount"
+    @pytest.mark.skip_ui
+    def test_opreturn_address(self, client):
+        inp1 = proto.TxInputType(
+            address_n=parse_path("44'/0'/0'/0/2"),
+            amount=390000,
+            prev_hash=TXHASH_d5f65e,
+            prev_index=0,
+        )
+
+        out1 = proto.TxOutputType(
+            address_n=parse_path("44'/0'/0'/1/2"),
+            amount=0,
+            op_return_data=b"OMNI TRANSACTION GOES HERE",
+            script_type=proto.OutputScriptType.PAYTOOPRETURN,
+        )
+
+        with client:
+            client.set_expected_responses(
+                [request_input(0), request_output(0), proto.Failure()]
+            )
+            with pytest.raises(
+                TrezorFailure, match="Output's address_n provided but not expected."
+            ):
+                _, serialized_tx = btc.sign_tx(
+                    client, "Bitcoin", [inp1], [out1], prev_txes=TX_API
                 )

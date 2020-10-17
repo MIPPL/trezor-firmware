@@ -28,9 +28,6 @@
         "Electrum-BTX": "https://github.com/LIMXTEC/electrum-btx",
         "Magnum": "https://magnumwallet.co"
     },
-    "bitcoin:CPC": {
-        "Capricoin Mobile Wallet": "https://wallet.capricoin.org"
-    },
     "bitcoin:CPU": {
         "Electrum-CPU": "https://cpuchain.org/download-page.html"
     },
@@ -100,8 +97,14 @@
     "bitcoin:POLIS": {
         "PolisPay": "https://polispay.com"
     },
+    "bitcoin:PPC": {
+        "Magnum": "https://magnumwallet.co"
+    },
     "bitcoin:QTUM": {
         "Qtum-Electrum": "https://github.com/qtumproject/qtum-electrum"
+    },
+    "bitcoin:RITO": {
+        "Chaintek": "https://wallet.chaintek.net/"
     },
     "bitcoin:RVN": {
         "Chaintek": "https://wallet.chaintek.net/",
@@ -115,7 +118,7 @@
         "Electrum-SYS": "https://github.com/syscoin/electrum"
     },
     "bitcoin:UNO": {
-        "Electrum-UNO": "https://github.com/flurbos/electrum"
+        "Electrum-UNO": "https://github.com/flurbos/electrum-uno"
     },
     "bitcoin:VIA": {
         "Vialectrum": "https://vialectrum.org"
@@ -132,6 +135,9 @@
     "bitcoin:XSN": {
         "Stakenet": "https://xsnexplorer.io/trezor"
     },
+    "bitcoin:XVG": {
+      "Electrum": "https://github.com/vergecurrency/electrum/releases"
+    },
     "bitcoin:XZC": {
         "Electrum-XZC": "https://github.com/zcoinofficial/electrum-xzc",
         "Znode Tool": "https://github.com/yura-pakhuchiy/znode-tool"
@@ -139,6 +145,9 @@
     "bitcoin:ZEC": {
         "Exodus": "https://www.exodus.io",
         "Magnum": "https://magnumwallet.co"
+    },
+    "bitcoin:ZCR": {
+        "Electrum-ZCR": "https://github.com/zcore-coin/electrum-wallet/"
     },
     "bitcoin:ZNY": {
         "Electrum-ZNY": "https://zny.electrum-jp.net"

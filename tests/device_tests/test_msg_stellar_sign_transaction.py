@@ -150,7 +150,7 @@ def test_sign_tx_payment_op_native_explicit_asset(client):
     op = messages.StellarPaymentOp()
     op.amount = 500111000
     op.destination_account = "GBOVKZBEM2YYLOCDCUXJ4IMRKHN4LCJAE7WEAEA2KF562XFAGDBOB64V"
-    op.asset = messages.StellarAssetType(0)
+    op.asset = messages.StellarAssetType(type=0)
 
     tx = _create_msg()
 
@@ -171,7 +171,9 @@ def test_sign_tx_payment_op_custom_asset1(client):
     op.destination_account = "GBOVKZBEM2YYLOCDCUXJ4IMRKHN4LCJAE7WEAEA2KF562XFAGDBOB64V"
 
     op.asset = messages.StellarAssetType(
-        1, "X", "GAUYJFQCYIHFQNS7CI6BFWD2DSSFKDIQZUQ3BLQODDKE4PSW7VVBKENC"
+        type=1,
+        code="X",
+        issuer="GAUYJFQCYIHFQNS7CI6BFWD2DSSFKDIQZUQ3BLQODDKE4PSW7VVBKENC",
     )
     tx = _create_msg()
 
@@ -192,7 +194,9 @@ def test_sign_tx_payment_op_custom_asset12(client):
     op.destination_account = "GBOVKZBEM2YYLOCDCUXJ4IMRKHN4LCJAE7WEAEA2KF562XFAGDBOB64V"
 
     op.asset = messages.StellarAssetType(
-        2, "ABCDEFGHIJKL", "GAUYJFQCYIHFQNS7CI6BFWD2DSSFKDIQZUQ3BLQODDKE4PSW7VVBKENC"
+        type=2,
+        code="ABCDEFGHIJKL",
+        issuer="GAUYJFQCYIHFQNS7CI6BFWD2DSSFKDIQZUQ3BLQODDKE4PSW7VVBKENC",
     )
     tx = _create_msg()
 
@@ -272,6 +276,37 @@ def test_sign_tx_set_options(client):
         b64encode(response.signature)
         == b"22rfcOrxBiE5akpNsnWX8yPgAOpclbajVqXUaXMNeL000p1OhFhi050t1+GNRpoSNyfVsJGNvtlICGpH4ksDAQ=="
         # db6adf70eaf10621396a4a4db27597f323e000ea5c95b6a356a5d469730d78bd34d29d4e845862d39d2dd7e18d469a123727d5b0918dbed948086a47e24b0301
+    )
+
+
+def test_sign_tx_timebounds(client):
+    op = messages.StellarSetOptionsOp()
+    tx = _create_msg()
+    tx.timebounds_start = 1577836800
+    tx.timebounds_end = 1577839000
+    response = stellar.sign_tx(client, tx, [op], ADDRESS_N, NETWORK_PASSPHRASE)
+    assert (
+        b64encode(response.signature)
+        == b"KkZSQxXxEwfeGuFEHD7e93hei34rwK7VB79udYzileg6P/QEzK+lKyB9blUy+dPV3e7PvlHMj1FKXOsrgj/uCA=="
+        # 2a46524315f11307de1ae1441c3edef7785e8b7e2bc0aed507bf6e758ce295e83a3ff404ccafa52b207d6e5532f9d3d5ddeecfbe51cc8f514a5ceb2b823fee08
+    )
+
+    tx.timebounds_start = 100
+    tx.timebounds_end = None
+    response = stellar.sign_tx(client, tx, [op], ADDRESS_N, NETWORK_PASSPHRASE)
+    assert (
+        b64encode(response.signature)
+        == b"ukpdaMwe6wdNnbVnOl0ZDvU1dde7Mtnjzy2IhjeZAjk8Ze+52WCv4M8IFjLoNF5c0aB847XYozFj8AsZ/k5fDQ=="
+        # ba4a5d68cc1eeb074d9db5673a5d190ef53575d7bb32d9e3cf2d8886379902393c65efb9d960afe0cf081632e8345e5cd1a07ce3b5d8a33163f00b19fe4e5f0d
+    )
+
+    tx.timebounds_start = None
+    tx.timebounds_end = 111111111
+    response = stellar.sign_tx(client, tx, [op], ADDRESS_N, NETWORK_PASSPHRASE)
+    assert (
+        b64encode(response.signature)
+        == b"9sFE/EC+zYlYC2t7R33HsI540nOmJi/aHruu2qG+RW4FEvhKLybLS5pRRhSb0IP3comcv1Q3e2Glvis6PgVICQ=="
+        # f6c144fc40becd89580b6b7b477dc7b08e78d273a6262fda1ebbaedaa1be456e0512f84a2f26cb4b9a5146149bd083f772899cbf54377b61a5be2b3a3e054809
     )
 
 

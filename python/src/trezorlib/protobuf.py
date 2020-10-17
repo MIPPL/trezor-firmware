@@ -49,7 +49,7 @@ FieldType = Union[
     Type["UnicodeType"],
     Type["BytesType"],
 ]
-FieldInfo = Tuple[str, FieldType, int]
+FieldInfo = Tuple[str, FieldType, Any]
 MT = TypeVar("MT", bound="MessageType")
 
 
@@ -161,7 +161,7 @@ class EnumType:
     def validate(self, fvalue: int) -> int:
         if fvalue not in self.enum_values:
             # raise TypeError("Invalid enum value")
-            LOG.warning("Value {} unknown for type {}".format(fvalue, self.enum_name))
+            LOG.info("Value {} unknown for type {}".format(fvalue, self.enum_name))
         return fvalue
 
     def to_str(self, fvalue: int) -> str:
@@ -205,6 +205,13 @@ class MessageType:
     def get_fields(cls) -> Dict[int, FieldInfo]:
         return {}
 
+    @classmethod
+    def get_field_type(cls, name: str) -> Optional[FieldType]:
+        for fname, ftype, _ in cls.get_fields().values():
+            if fname == name:
+                return ftype
+        return None
+
     def __init__(self, **kwargs: Any) -> None:
         for kw in kwargs:
             setattr(self, kw, kwargs[kw])
@@ -232,12 +239,14 @@ class MessageType:
 
     def _fill_missing(self) -> None:
         # fill missing fields
-        for fname, ftype, fflags in self.get_fields().values():
+        for fname, _, fdefault in self.get_fields().values():
             if not hasattr(self, fname):
-                if fflags & FLAG_REPEATED:
+                if fdefault is FLAG_REPEATED:
                     setattr(self, fname, [])
+                elif fdefault is FLAG_REQUIRED:
+                    raise ValueError("value for required field is missing")
                 else:
-                    setattr(self, fname, None)
+                    setattr(self, fname, fdefault)
 
     def ByteSize(self) -> int:
         data = BytesIO()
@@ -269,7 +278,8 @@ class CountingWriter:
         return nwritten
 
 
-FLAG_REPEATED = 1
+FLAG_REPEATED = object()
+FLAG_REQUIRED = object()
 
 
 def decode_packed_array_field(ftype: FieldType, reader: Reader) -> List[Any]:
@@ -318,7 +328,14 @@ def decode_length_delimited_field(
 
 def load_message(reader: Reader, msg_type: Type[MT]) -> MT:
     fields = msg_type.get_fields()
-    msg = msg_type()
+
+    msg_dict = {}
+    # pre-seed the dict
+    for fname, _, fdefault in fields.values():
+        if fdefault is FLAG_REPEATED:
+            msg_dict[fname] = []
+        elif fdefault is not FLAG_REQUIRED:
+            msg_dict[fname] = fdefault
 
     while True:
         try:
@@ -341,9 +358,9 @@ def load_message(reader: Reader, msg_type: Type[MT]) -> MT:
                 raise ValueError
             continue
 
-        fname, ftype, fflags = field
+        fname, ftype, fdefault = field
 
-        if wtype == 2 and ftype.WIRE_TYPE == 0 and fflags & FLAG_REPEATED:
+        if wtype == 2 and ftype.WIRE_TYPE == 0 and fdefault is FLAG_REPEATED:
             # packed array
             fvalues = decode_packed_array_field(ftype, reader)
 
@@ -359,18 +376,17 @@ def load_message(reader: Reader, msg_type: Type[MT]) -> MT:
         else:
             raise TypeError  # unknown wire type
 
-        if fflags & FLAG_REPEATED:
-            pvalue = getattr(msg, fname)
-            pvalue.extend(fvalues)
-            fvalue = pvalue
+        if fdefault is FLAG_REPEATED:
+            msg_dict[fname].extend(fvalues)
         elif len(fvalues) != 1:
             raise ValueError("Unexpected multiple values in non-repeating field")
         else:
-            fvalue = fvalues[0]
+            msg_dict[fname] = fvalues[0]
 
-        setattr(msg, fname, fvalue)
-
-    return msg
+    for fname, _, fdefault in fields.values():
+        if fdefault is FLAG_REQUIRED and fname not in msg_dict:
+            raise ValueError  # required field was not received
+    return msg_type(**msg_dict)
 
 
 def dump_message(writer: Writer, msg: MessageType) -> None:
@@ -379,7 +395,7 @@ def dump_message(writer: Writer, msg: MessageType) -> None:
     fields = mtype.get_fields()
 
     for ftag in fields:
-        fname, ftype, fflags = fields[ftag]
+        fname, ftype, fdefault = fields[ftag]
 
         fvalue = getattr(msg, fname, None)
         if fvalue is None:
@@ -387,7 +403,7 @@ def dump_message(writer: Writer, msg: MessageType) -> None:
 
         fkey = (ftag << 3) | ftype.WIRE_TYPE
 
-        if not fflags & FLAG_REPEATED:
+        if fdefault is not FLAG_REPEATED:
             repvalue[0] = fvalue
             fvalue = repvalue
 
@@ -438,23 +454,17 @@ def format_message(
         printable = sum(1 for byte in bytes if 0x20 <= byte <= 0x7E)
         return printable / len(bytes) > 0.8
 
-    def get_type(name: str) -> Any:
-        try:
-            return next(ft for fn, ft, _ in pb.get_fields().values() if fn == name)
-        except StopIteration:
-            return None
-
     def pformat(name: str, value: Any, indent: int) -> str:
         level = sep * indent
         leadin = sep * (indent + 1)
-        ftype = get_type(name)
+        ftype = pb.get_field_type(name)
 
         if isinstance(value, MessageType):
             return format_message(value, indent, sep)
 
         if isinstance(value, list):
             # short list of simple values
-            if not value or isinstance(value, (UVarintType, SVarintType, BoolType)):
+            if not value or ftype in (UVarintType, SVarintType, BoolType):
                 return repr(value)
 
             # long list, one line per entry
@@ -484,7 +494,10 @@ def format_message(
             return "{} bytes {}{}".format(length, output, suffix)
 
         if isinstance(value, int) and isinstance(ftype, EnumType):
-            return "{} ({})".format(ftype.to_str(value), value)
+            try:
+                return "{} ({})".format(ftype.to_str(value), value)
+            except TypeError:
+                return str(value)
 
         return repr(value)
 
@@ -525,8 +538,8 @@ def value_to_proto(ftype: FieldType, value: Any) -> Any:
 
 def dict_to_proto(message_type: Type[MT], d: Dict[str, Any]) -> MT:
     params = {}
-    for fname, ftype, fflags in message_type.get_fields().values():
-        repeated = fflags & FLAG_REPEATED
+    for fname, ftype, fdefault in message_type.get_fields().values():
+        repeated = fdefault is FLAG_REPEATED
         value = d.get(fname)
         if value is None:
             continue
@@ -549,13 +562,18 @@ def dict_to_proto(message_type: Type[MT], d: Dict[str, Any]) -> MT:
 
 
 def to_dict(msg: MessageType, hexlify_bytes: bool = True) -> Dict[str, Any]:
-    def convert_value(value: Any) -> Any:
+    def convert_value(ftype: FieldType, value: Any) -> Any:
         if hexlify_bytes and isinstance(value, bytes):
             return value.hex()
         elif isinstance(value, MessageType):
             return to_dict(value, hexlify_bytes)
         elif isinstance(value, list):
-            return [convert_value(v) for v in value]
+            return [convert_value(ftype, v) for v in value]
+        elif isinstance(value, int) and isinstance(ftype, EnumType):
+            try:
+                return ftype.to_str(value)
+            except TypeError:
+                return value
         else:
             return value
 
@@ -563,6 +581,6 @@ def to_dict(msg: MessageType, hexlify_bytes: bool = True) -> Dict[str, Any]:
     for key, value in msg.__dict__.items():
         if value is None or value == []:
             continue
-        res[key] = convert_value(value)
+        res[key] = convert_value(msg.get_field_type(key), value)
 
     return res

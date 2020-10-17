@@ -51,7 +51,6 @@ void fsm_msgEthereumGetPublicKey(const EthereumGetPublicKey *msg) {
   resp->node.chain_code.size = 32;
   memcpy(resp->node.chain_code.bytes, node->chain_code, 32);
   resp->node.has_private_key = false;
-  resp->node.has_public_key = true;
   resp->node.public_key.size = 33;
   memcpy(resp->node.public_key.bytes, node->public_key, 33);
 
@@ -121,7 +120,7 @@ void fsm_msgEthereumGetAddress(const EthereumGetAddress *msg) {
     strlcpy(desc, "Address:", sizeof(desc));
 
     if (!fsm_layoutAddress(resp->address, desc, false, 0, msg->address_n,
-                           msg->address_n_count, true)) {
+                           msg->address_n_count, true, NULL, 0, NULL)) {
       return;
     }
   }

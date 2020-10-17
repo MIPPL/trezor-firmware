@@ -78,11 +78,34 @@ def write_uint64_be(w: Writer, n: int) -> int:
     return 8
 
 
-def write_bytes(w: Writer, b: bytes) -> int:
+def write_bytes_unchecked(w: Writer, b: bytes) -> int:
     w.extend(b)
     return len(b)
 
 
-def write_bytes_reversed(w: Writer, b: bytes) -> int:
+def write_bytes_fixed(w: Writer, b: bytes, length: int) -> int:
+    ensure(len(b) == length)
+    w.extend(b)
+    return length
+
+
+def write_bytes_reversed(w: Writer, b: bytes, length: int) -> int:
+    ensure(len(b) == length)
     w.extend(bytes(reversed(b)))
-    return len(b)
+    return length
+
+
+def write_bitcoin_varint(w: Writer, n: int) -> None:
+    ensure(n >= 0 and n <= 0xFFFFFFFF)
+    if n < 253:
+        w.append(n & 0xFF)
+    elif n < 0x10000:
+        w.append(253)
+        w.append(n & 0xFF)
+        w.append((n >> 8) & 0xFF)
+    else:
+        w.append(254)
+        w.append(n & 0xFF)
+        w.append((n >> 8) & 0xFF)
+        w.append((n >> 16) & 0xFF)
+        w.append((n >> 24) & 0xFF)

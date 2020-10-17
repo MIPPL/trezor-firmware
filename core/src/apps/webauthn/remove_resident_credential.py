@@ -1,3 +1,5 @@
+import storage.device
+import storage.resident_credentials
 from trezor import wire
 from trezor.messages.Success import Success
 from trezor.messages.WebAuthnRemoveResidentCredential import (
@@ -5,12 +7,9 @@ from trezor.messages.WebAuthnRemoveResidentCredential import (
 )
 
 from apps.common.confirm import require_confirm
-from apps.common.storage.webauthn import (
-    erase_resident_credential,
-    get_resident_credential,
-)
 from apps.webauthn.confirm import ConfirmContent, ConfirmInfo
 from apps.webauthn.credential import Fido2Credential
+from apps.webauthn.resident_credentials import get_resident_credential
 
 if False:
     from typing import Optional
@@ -34,6 +33,8 @@ class ConfirmRemoveCredential(ConfirmInfo):
 async def remove_resident_credential(
     ctx: wire.Context, msg: WebAuthnRemoveResidentCredential
 ) -> Success:
+    if not storage.device.is_initialized():
+        raise wire.NotInitialized("Device is not initialized")
     if msg.index is None:
         raise wire.ProcessError("Missing credential index parameter.")
 
@@ -44,5 +45,6 @@ async def remove_resident_credential(
     content = ConfirmContent(ConfirmRemoveCredential(cred))
     await require_confirm(ctx, content)
 
-    erase_resident_credential(msg.index)
+    assert cred.index is not None
+    storage.resident_credentials.delete(cred.index)
     return Success(message="Credential removed")

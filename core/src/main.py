@@ -6,34 +6,18 @@ import boot  # noqa: F401
 # prepare the USB interfaces, but do not connect to the host yet
 import usb
 
-from trezor import utils
+from trezor import loop, utils, wire, workflow
 
 # start the USB
 usb.bus.open()
 
-# switch into unprivileged mode, as we don't need the extra permissions anymore
-utils.set_mode_unprivileged()
 
-
-def _boot_recovery() -> None:
+def _boot_apps() -> None:
     # load applications
-    import apps.homescreen
-
-    # boot applications
-    apps.homescreen.boot(features_only=True)
-    if __debug__:
-        apps.debug.boot()
-
-    from apps.management.recovery_device.homescreen import recovery_homescreen
-
-    loop.schedule(recovery_homescreen())
-
-
-def _boot_default() -> None:
-    # load applications
-    import apps.homescreen
+    import apps.base
     import apps.management
-    import apps.wallet
+    import apps.bitcoin
+    import apps.misc
 
     if not utils.BITCOIN_ONLY:
         import apps.ethereum
@@ -52,9 +36,10 @@ def _boot_default() -> None:
         import apps.debug
 
     # boot applications
-    apps.homescreen.boot()
+    apps.base.boot()
     apps.management.boot()
-    apps.wallet.boot()
+    apps.bitcoin.boot()
+    apps.misc.boot()
     if not utils.BITCOIN_ONLY:
         apps.ethereum.boot()
         apps.lisk.boot()
@@ -71,25 +56,18 @@ def _boot_default() -> None:
         apps.debug.boot()
 
     # run main event loop and specify which screen is the default
-    from apps.homescreen.homescreen import homescreen
+    apps.base.set_homescreen()
+    workflow.start_default()
 
-    workflow.start_default(homescreen)
 
+_boot_apps()
 
-from trezor import loop, wire, workflow
-from apps.common.storage import recovery
+# initialize the wire codec
+wire.setup(usb.iface_wire)
+if __debug__:
+    wire.setup(usb.iface_debug, use_workflow=False)
 
-while True:
-    # initialize the wire codec
-    wire.setup(usb.iface_wire)
-    if __debug__:
-        wire.setup(usb.iface_debug)
+loop.run()
 
-    # boot either in recovery or default mode
-    if recovery.is_in_progress():
-        _boot_recovery()
-    else:
-        _boot_default()
-    loop.run()
-
-    # loop is empty, reboot
+# loop is empty. That should not happen
+utils.halt("All tasks have died.")

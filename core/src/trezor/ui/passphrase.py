@@ -1,7 +1,6 @@
 from micropython import const
 
-from trezor import io, loop, res, ui
-from trezor.messages import PassphraseSourceType
+from trezor import io, loop, res, ui, workflow
 from trezor.ui import display
 from trezor.ui.button import Button, ButtonClear, ButtonConfirm
 from trezor.ui.swipe import SWIPE_HORIZONTAL, SWIPE_LEFT, Swipe
@@ -209,7 +208,7 @@ class PassphraseKeyboard(ui.Layout):
 
     async def handle_input(self) -> None:
         touch = loop.wait(io.TOUCH)
-        timeout = loop.sleep(1000 * 1000 * 1)
+        timeout = loop.sleep(1000)
         race_touch = loop.race(touch)
         race_timeout = loop.race(touch, timeout)
 
@@ -222,6 +221,7 @@ class PassphraseKeyboard(ui.Layout):
 
             if touch in race.finished:
                 event, x, y = result
+                workflow.idle_timer.touch()
                 self.dispatch(event, x, y)
             else:
                 self.on_timeout()
@@ -245,26 +245,15 @@ class PassphraseKeyboard(ui.Layout):
         raise ui.Result(self.input.text)
 
     def create_tasks(self) -> Tuple[loop.Task, ...]:
-        return self.handle_input(), self.handle_rendering(), self.handle_paging()
+        tasks = (
+            self.handle_input(),
+            self.handle_rendering(),
+            self.handle_paging(),
+        )  # type: Tuple[loop.Task, ...]
 
+        if __debug__:
+            from apps.debug import input_signal
 
-class PassphraseSource(ui.Layout):
-    def __init__(self, content: ui.Component) -> None:
-        self.content = content
-
-        self.device = Button(ui.grid(8, n_y=4, n_x=4, cells_x=4), "Device")
-        self.device.on_click = self.on_device  # type: ignore
-
-        self.host = Button(ui.grid(12, n_y=4, n_x=4, cells_x=4), "Host")
-        self.host.on_click = self.on_host  # type: ignore
-
-    def dispatch(self, event: int, x: int, y: int) -> None:
-        self.content.dispatch(event, x, y)
-        self.device.dispatch(event, x, y)
-        self.host.dispatch(event, x, y)
-
-    def on_device(self) -> None:
-        raise ui.Result(PassphraseSourceType.DEVICE)
-
-    def on_host(self) -> None:
-        raise ui.Result(PassphraseSourceType.HOST)
+            return tasks + (input_signal(),)
+        else:
+            return tasks
