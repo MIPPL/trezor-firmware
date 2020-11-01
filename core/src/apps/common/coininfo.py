@@ -1420,6 +1420,7 @@ def by_name(name: str) -> CoinInfo:
             return CoinInfo(
                 coin_name=name,
                 coin_shortcut="SIN",
+				decimals=8,
                 address_type=63,
                 address_type_p2sh=5,
                 maxfee_kb=1000000,
